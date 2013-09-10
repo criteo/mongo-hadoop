@@ -73,7 +73,7 @@ public class BSONFileInputFormat extends FileInputFormat {
                 log.info("skipping file " + file.getPath() + " not matched path filter.");
                 continue;
             }else{
-                log.info("processing file " + file.getPath());
+                log.debug("processing file " + file.getPath());
             }
 
             BSONSplitter splitter = new BSONSplitter();
@@ -83,10 +83,10 @@ public class BSONFileInputFormat extends FileInputFormat {
             try{
                 splitter.loadSplitsFromSplitFile(file, splitFilePath);
             }catch(BSONSplitter.NoSplitFileException nsfe){
-                log.info("No split file for " + file + "; building split file");
+                log.debug("No split file for " + file + "; building split file");
                 splitter.readSplitsForFile(file);
             }
-            log.info("BSONSplitter found " + splitter.getAllSplits().size() + " splits.");
+            log.debug("BSONSplitter found " + splitter.getAllSplits().size() + " splits.");
             splits.addAll(splitter.getAllSplits());
         }
         log.info("Total of " + splits.size() + " found.");
