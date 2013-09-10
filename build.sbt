@@ -1,7 +1,10 @@
-
 name := "mongo-hadoop"
 
 organization := "org.mongodb"
 
+publishMavenStyle := true
 
-hadoopRelease in ThisBuild := "default"
+publishTo := Some(Resolver.file("file", new File(Path.userHome.absolutePath+"/.m2/repository")))
+
+hadoopRelease in ThisBuild := "cdh4"
+
