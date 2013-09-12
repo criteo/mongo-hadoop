@@ -8,7 +8,7 @@ import AssemblyKeys._
 object MongoHadoopBuild extends Build {
 
   lazy val buildSettings = Seq(
-    version := "1.1.0",
+    version := "1.1.1_criteo",
     crossScalaVersions := Nil,
     crossPaths := false,
     organization := "org.mongodb"
@@ -23,7 +23,7 @@ object MongoHadoopBuild extends Build {
   private val cdh3Rel = "cdh3u3"
   private val cdh3Hadoop = "0.20.2-%s".format(cdh3Rel) // current "base" version they patch against
   private val cdh3Pig = "0.8.1-%s".format(cdh3Rel)
-  private val cdh4Rel = "cdh4.3.0"
+  private val cdh4Rel = "cdh4.4.0"
   private val cdh4YarnHadoop = "2.0.0-%s".format(cdh4Rel) // current "base" version they patch against
   private val cdh4CoreHadoop = "2.0.0-mr1-%s".format(cdh4Rel)
   private val cdh4Pig = "0.11.0-%s".format(cdh4Rel)
@@ -36,7 +36,8 @@ object MongoHadoopBuild extends Build {
                                   "0.22.x" -> hadoopDependencies("0.22.0", true, stockPig, nextGen=true),
                                   "0.23" -> hadoopDependencies("0.23.1", true, stockPig, nextGen=true),
                                   "0.23.x" -> hadoopDependencies("0.23.1", true, stockPig, nextGen=true),
-                                  "cdh4" -> hadoopDependencies(cdh4CoreHadoop, true, cdh4Pig, Some(cdh4YarnHadoop), nextGen=true),
+                                  //"cdh4" -> hadoopDependencies(cdh4CoreHadoop, true, cdh4Pig, Some(cdh4YarnHadoop), nextGen=true), 
+                                  "cdh4" -> hadoopDependencies(cdh4CoreHadoop, true, cdh4Pig, Some(cdh4CoreHadoop), nextGen=false),
                                   "cdh3" -> hadoopDependencies(cdh3Hadoop, true, cdh3Pig),
                                   "1.0" -> hadoopDependencies("1.0.4", false, stockPig),
                                   "1.0.x" -> hadoopDependencies("1.0.4", false, stockPig),
@@ -108,7 +109,7 @@ object MongoHadoopBuild extends Build {
     },
     javacOptions ++= Seq("-source", "1.5", "-target", "1.5"),
     javacOptions in doc := Seq("-source", "1.5")
-  )
+  ) ++ Seq( publishTo := Some(Resolver.file("file", new File(Path.userHome.absolutePath+"/.m2/repository"))) )
 
   /** Settings that are dependent on a hadoop version */
   lazy val dependentSettings = baseSettings ++ Seq(
@@ -183,7 +184,11 @@ object MongoHadoopBuild extends Build {
 
   )
 
-  val exampleSettings = dependentSettings
+  val exampleSettings = dependentSettings ++ assemblySettings ++ Seq(
+    mainClass in assembly := Some("com.mongodb.hadoop.examples.enron.EnronMail"),
+    excludedJars in assembly <<= (fullClasspath in assembly) map ( cp =>
+      cp filterNot { x =>
+        x.data.getName.startsWith("mongo-hadoop-core") || x.data.getName.startsWith("enron-example") || x.data.getName.startsWith("mongo") } ) )
 
   val pigSettings = dependentSettings ++ assemblySettings ++ Seq(
     excludedJars in assembly <<= (fullClasspath in assembly) map ( cp =>
@@ -272,29 +277,33 @@ object MongoHadoopBuild extends Build {
       (if (useStreaming) Some(streamingDependency(altStreamingVer.getOrElse(hadoopVersion))) else None, () => {
       println("*** Adding Hadoop Dependencies for Hadoop '%s'".format(altStreamingVer.getOrElse(hadoopVersion)))
 
-      val deps = if (altStreamingVer.isDefined || nextGen)
-        Seq("org.apache.hadoop" % "hadoop-common" % altStreamingVer.getOrElse(hadoopVersion))
-      else
-        Seq("org.apache.hadoop" % "hadoop-core" % hadoopVersion/*,
-            ("org.apache.hadoop" % "hadoop-hdfs" % hadoopVersion notTransitive()).exclude("commons-daemon", "commons-daemon")*/)
-      if (nextGen) {
+      if (altStreamingVer.getOrElse(cdh4YarnHadoop) == cdh4YarnHadoop) {
+              val deps = if (altStreamingVer.isDefined || nextGen)
+                Seq("org.apache.hadoop" % "hadoop-common" % altStreamingVer.getOrElse(hadoopVersion))
+              else
+                Seq("org.apache.hadoop" % "hadoop-core" % hadoopVersion/*,
+                    ("org.apache.hadoop" % "hadoop-hdfs" % hadoopVersion notTransitive()).exclude("commons-daemon", "commons-daemon")*/)
+              if (nextGen) {
 
-        def mrDep(mod: String) = "org.apache.hadoop" % "hadoop-mapreduce-client-%s".format(mod) % altStreamingVer.getOrElse(hadoopVersion) notTransitive() exclude("org.apache.hadoop", "hdfs")
+                def mrDep(mod: String) = "org.apache.hadoop" % "hadoop-mapreduce-client-%s".format(mod) % altStreamingVer.getOrElse(hadoopVersion) notTransitive() exclude("org.apache.hadoop", "hdfs") 
 
-
-        if (hadoopVersion.startsWith("0.22")) {
-            deps ++ Seq("org.apache.hadoop" % "hadoop-mapred" % altStreamingVer.getOrElse(hadoopVersion))
-        } else if (hadoopVersion.startsWith("0.23") || hadoopVersion.startsWith("2.0.0")) {
-          deps ++ Seq(mrDep("core"), mrDep("common"), mrDep("shuffle"),
-                      mrDep("shuffle"), mrDep("app"), mrDep("jobclient"))
-        } else {
-          sys.error("Don't know how to do any special mapping for Hadoop Version " + hadoopVersion)
+                if (hadoopVersion.startsWith("0.22")) {
+                    deps ++ Seq("org.apache.hadoop" % "hadoop-mapred" % altStreamingVer.getOrElse(hadoopVersion))
+                } else if (hadoopVersion.startsWith("0.23") || hadoopVersion.startsWith("2.0.0")) {
+                  deps ++ Seq(mrDep("core"), mrDep("common"), mrDep("shuffle"),
+                              mrDep("shuffle"), mrDep("app"), mrDep("jobclient"))
+                } else {
+                  sys.error("Don't know how to do any special mapping for Hadoop Version " + hadoopVersion)
+                }
+              }
+              else
+                deps
         }
-      }
-      else
-        deps
+        else {
+                def mrDep(mod: String) = "org.apache.hadoop" % "hadoop-%s".format(mod) % altStreamingVer.getOrElse(hadoopVersion) notTransitive() exclude("org.apache.hadoop", "hdfs")
+                Seq("org.apache.hadoop" % "hadoop-common" % cdh4YarnHadoop, mrDep("core"), mrDep("client"))
 
-
+        }
       }, hadoopVersion, pigDependency(pigVersion))
   }
 
